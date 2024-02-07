@@ -6,8 +6,11 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.zhoucong.exchange.enums.Direction;
+import com.zhoucong.exchange.enums.OrderStatus;
 import com.zhoucong.exchange.model.support.EntitySupport;
 
 /**
@@ -46,8 +49,13 @@ public class OrderEntity implements EntitySupport, Comparable<OrderEntity>{
      */
     @Column(nullable = false, updatable = false, length = VAR_ENUM)
     public Direction direction;
-    //public OrderStatus status;
-
+    
+    /**
+     * Order status.
+     */
+    @Column(nullable = false, updatable = false, length = VAR_ENUM)
+    public OrderStatus status;
+    
     // 订单数量 / 未成交数量:
     /**
      * The order quantity. MUST NOT change after insert.
@@ -72,12 +80,27 @@ public class OrderEntity implements EntitySupport, Comparable<OrderEntity>{
     @Column(nullable = false, updatable = false)
     public long updatedAt;
 	
+    private int version;
+    
+    public void updateOrder(BigDecimal unfilledQuantity, OrderStatus status, long updatedAt) {
+        this.version++;
+        this.unfilledQuantity = unfilledQuantity;
+        this.status = status;
+        this.updatedAt = updatedAt;
+        this.version++;
+    }
+    
+    @Transient
+    @JsonIgnore
+    public int getVersion() {
+        return this.version;
+    }
+    
     /**
      * 按OrderID排序
      */
     @Override
 	public int compareTo(OrderEntity o) {
     	return Long.compare(this.id.longValue(), o.id.longValue());
-	}
-    
+	}    
 }
