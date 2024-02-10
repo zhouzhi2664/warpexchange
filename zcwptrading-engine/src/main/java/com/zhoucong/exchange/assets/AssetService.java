@@ -47,7 +47,7 @@ public class AssetService {
         if (amount.signum() == 0) {
             return true;
         }
-     // 转账金额不能为负:
+        // 转账金额不能为负:
         if (amount.signum() < 0) {
             throw new IllegalArgumentException("Negative amount");
         }
