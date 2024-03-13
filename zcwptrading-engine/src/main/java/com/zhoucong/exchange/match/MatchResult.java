@@ -21,6 +21,6 @@ public class MatchResult {
 
     @Override
     public String toString() {
-    	return "...（Waiting to write）";
+    	return "MatchResult toString() is not work（Waiting to write）";
     }
 }

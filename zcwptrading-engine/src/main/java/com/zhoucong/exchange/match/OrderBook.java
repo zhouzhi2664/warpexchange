@@ -1,9 +1,12 @@
 package com.zhoucong.exchange.match;
 
+import com.zhoucong.exchange.bean.OrderBookItemBean;
 import com.zhoucong.exchange.enums.Direction;
 import com.zhoucong.exchange.model.trade.OrderEntity;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.TreeMap;
 
 public class OrderBook {
@@ -28,6 +31,34 @@ public class OrderBook {
     }
     
     //...
+    
+    public List<OrderBookItemBean> getOrderBook(int maxDepth) {
+    	List<OrderBookItemBean> items = new ArrayList<>(maxDepth);
+    	OrderBookItemBean prevItem = null;
+    	for (OrderKey key : this.book.keySet()) {
+    		OrderEntity order = this.book.get(key);
+            if (prevItem == null) {
+                prevItem = new OrderBookItemBean(order.price, order.unfilledQuantity);
+                items.add(prevItem);
+            } else {
+            	if (order.price.compareTo(prevItem.price) == 0) {
+                    prevItem.addQuantity(order.unfilledQuantity);
+                } else {
+                	if (items.size() >= maxDepth) {
+                        break;
+                    }
+                    prevItem = new OrderBookItemBean(order.price, order.unfilledQuantity);
+                    items.add(prevItem);
+                }
+            }
+    	}
+    	return items;
+    }
+    
+    @Override
+    public String toString() {
+    	return "OrderBook toString() does not work，Because there is no override";
+    }
     
     private static final Comparator<OrderKey> SORT_SELL = new Comparator<>() {
     	@Override

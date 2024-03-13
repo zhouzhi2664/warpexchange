@@ -2,6 +2,8 @@ package com.zhoucong.exchange.model.trade;
 
 import java.math.BigDecimal;
 
+import org.springframework.lang.Nullable;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -90,10 +92,41 @@ public class OrderEntity implements EntitySupport, Comparable<OrderEntity>{
         this.version++;
     }
     
+    /**
+     * 用于推送时的异步序列化
+     */
+    @Nullable
+    public OrderEntity copy() {
+    	OrderEntity entity = new OrderEntity();
+    	int ver = this.version;
+    	if (ver != this.version) {
+            return null;
+        }
+    	entity.status = this.status;
+        entity.unfilledQuantity = this.unfilledQuantity;
+        entity.updatedAt = this.updatedAt;
+        entity.createdAt = this.createdAt;
+        entity.direction = this.direction;
+        entity.id = this.id;
+        entity.price = this.price;
+        entity.quantity = this.quantity;
+        entity.sequenceId = this.sequenceId;
+        entity.userId = this.userId;
+    	return entity;
+    }
+    
     @Transient
     @JsonIgnore
     public int getVersion() {
         return this.version;
+    }
+    
+    @Override
+    public String toString() {
+        return "OrderEntity [id=" + id + ", sequenceId=" + sequenceId + ", direction=" + direction + ", userId="
+                + userId + ", status=" + status + ", price=" + price + ", createdAt=" + createdAt + ", updatedAt="
+                + updatedAt + ", version=" + version + ", quantity=" + quantity + ", unfilledQuantity="
+                + unfilledQuantity + "]";
     }
     
     /**

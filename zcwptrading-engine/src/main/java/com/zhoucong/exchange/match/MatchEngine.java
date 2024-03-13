@@ -3,6 +3,7 @@ package com.zhoucong.exchange.match;
 import java.math.BigDecimal;
 
 import com.zhoucong.exchange.enums.OrderStatus;
+import com.zhoucong.exchange.bean.OrderBookBean;
 import com.zhoucong.exchange.enums.Direction;
 import com.zhoucong.exchange.model.trade.OrderEntity;
 
@@ -12,7 +13,7 @@ public class MatchEngine {
 	public final OrderBook buyBook = new OrderBook(Direction.BUY);
     public final OrderBook sellBook = new OrderBook(Direction.SELL);
     public BigDecimal marketPrice = BigDecimal.ZERO; // 最新市场价
-    //private long sequenceId;
+    private long sequenceId;
     
     public MatchResult processOrder(long sequenceId, OrderEntity order) {
     	return switch (order.direction) {
@@ -93,7 +94,10 @@ public class MatchEngine {
         order.updateOrder(order.unfilledQuantity, status, ts);    	
     }
     
-    //...
+    public OrderBookBean getOrderBook(int maxDepth) {
+        return new OrderBookBean(this.sequenceId, this.marketPrice, this.buyBook.getOrderBook(maxDepth),
+                this.sellBook.getOrderBook(maxDepth));
+    }
     
     public void debug() {
         System.out.println("---------- match engine ----------");
