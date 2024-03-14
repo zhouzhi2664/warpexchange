@@ -24,6 +24,7 @@ import com.zhoucong.exchange.model.trade.MatchDetailEntity;
 import com.zhoucong.exchange.model.quotation.TickEntity;
 import com.zhoucong.exchange.match.MatchDetailRecord;
 import com.zhoucong.exchange.enums.MatchType;
+import com.zhoucong.exchange.store.StoreService;
 import com.zhoucong.exchange.assets.AssetService;
 import com.zhoucong.exchange.clearing.ClearingService;
 import com.zhoucong.exchange.match.MatchEngine;
@@ -51,6 +52,9 @@ public class TradingEngineService extends LoggerSupport{
 
     @Autowired
     MatchEngine matchEngine;
+    
+    @Autowired
+    StoreService storeService;
 
     @Autowired
     ClearingService clearingService;
@@ -62,6 +66,8 @@ public class TradingEngineService extends LoggerSupport{
     private Queue<List<MatchDetailEntity>> matchQueue = new ConcurrentLinkedQueue<>();
     private Queue<ApiResultMessage> apiResultQueue = new ConcurrentLinkedQueue<>();
     private Queue<NotificationMessage> notificationQueue = new ConcurrentLinkedQueue<>();
+    
+    
     
     // called by dbExecutor thread only:
     private void saveToDb() throws InterruptedException {
@@ -79,7 +85,33 @@ public class TradingEngineService extends LoggerSupport{
                  }
     		 }
     		 batch.sort(MatchDetailEntity::compareTo);
+    		 if (logger.isDebugEnabled()) {
+                 logger.debug("batch insert {} match details...", batch.size());
+             }
+    		 this.storeService.insertIgnore(batch);
     	 }
+    	 if(!orderQueue.isEmpty()) {
+    		 List<OrderEntity> batch = new ArrayList<>(1000);
+    		 for(;;) {
+    			 List<OrderEntity> orders = orderQueue.poll();
+                 if (orders != null) {
+                     batch.addAll(orders);
+                     if (batch.size() >= 1000) {
+                         break;
+                     }
+                 } else {
+                     break;
+                 }
+    		 }
+    		 batch.sort(OrderEntity::compareTo);
+             if (logger.isDebugEnabled()) {
+                 logger.debug("batch insert {} orders...", batch.size());
+             }
+             this.storeService.insertIgnore(batch);             
+    	 }
+    	 if (matchQueue.isEmpty()) {
+             Thread.sleep(1);
+         }
     }
     
     public void processMessages(List<AbstractEvent> messages) {
