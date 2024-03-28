@@ -7,6 +7,9 @@ import java.util.Map;
 import java.util.function.Function;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 
 /**
  * Represent a bean public field with JPA annotation.
@@ -28,6 +31,54 @@ public class AccessibleProperty {
     final Function<Object, Object> javaToSqlMapper;
 
     final Function<Object, Object> sqlToJavaMapper;
+    
+    public Object get(Object bean) throws ReflectiveOperationException {
+        Object obj = this.field.get(bean);
+        if (this.javaToSqlMapper != null) {
+            obj = this.javaToSqlMapper.apply(obj);
+        }
+        return obj;
+    }
+    
+    public void set(Object bean, Object value) throws ReflectiveOperationException {
+        if (this.sqlToJavaMapper != null) {
+            value = this.sqlToJavaMapper.apply(value);
+        }
+        this.field.set(bean, value);
+    }
+    
+    boolean isId() {
+    	return this.field.getAnnotation(Id.class) != null;
+    }
+    
+    // is id && is id marked as @GeneratedValue(strategy=GenerationType.IDENTITY)
+    boolean isIdentityId() {
+    	if (!isId()) {
+            return false;
+        }
+    	GeneratedValue gv = this.field.getAnnotation(GeneratedValue.class);
+    	if (gv == null) {
+            return false;
+        }
+    	GenerationType gt = gv.strategy();
+        return gt == GenerationType.IDENTITY;
+    }
+    
+    boolean isInsertable() {
+    	if (isIdentityId()) {
+            return false;
+        }
+        Column col = this.field.getAnnotation(Column.class);
+        return col == null || col.insertable();
+    }
+    
+    boolean isUpdatable() {
+    	if (isId()) {
+            return false;
+        }
+        Column col = this.field.getAnnotation(Column.class);
+        return col == null || col.updatable();
+    }
     
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public AccessibleProperty(Field f) {
@@ -63,7 +114,13 @@ public class AccessibleProperty {
     	boolean nullable = col == null ? true : col.nullable();
         colDef = colDef + " " + (nullable ? "NULL" : "NOT NULL");
         
-        //TODO
+        if (isIdentityId()) {
+            colDef = colDef + " AUTO_INCREMENT";
+        }
+        
+        if (!isId() && col.unique()) {
+            colDef = colDef + " UNIQUE";
+        }
         
     	return colDef;
     }

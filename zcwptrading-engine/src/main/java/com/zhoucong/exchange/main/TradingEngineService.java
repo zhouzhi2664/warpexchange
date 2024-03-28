@@ -69,6 +69,18 @@ public class TradingEngineService extends LoggerSupport{
     
     
     
+    private void runDbThread() {
+    	logger.info("start batch insert to db...");
+    	for (;;) {
+    		try {
+                saveToDb();
+            } catch (InterruptedException e) {
+                logger.warn("{} was interrupted.", Thread.currentThread().getName());
+                break;
+            }
+    	}
+    }
+    
     // called by dbExecutor thread only:
     private void saveToDb() throws InterruptedException {
     	 if (!matchQueue.isEmpty()) {
