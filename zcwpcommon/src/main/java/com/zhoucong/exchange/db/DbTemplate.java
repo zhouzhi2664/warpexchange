@@ -75,6 +75,11 @@ public class DbTemplate {
         }
     }
     
+    public <T> From<T> from(Class<T> entityClass) {
+    	Mapper<T> mapper = getMapper(entityClass);
+    	return new From<>(new Criteria<>(this), mapper);
+    }
+    
 	//TODO
 	
 	<T> void doInsert(T bean, boolean isIgnore) {
@@ -123,8 +128,11 @@ public class DbTemplate {
 	// get mapper by class:
     @SuppressWarnings("unchecked")
     <T> Mapper<T> getMapper(Class<T> clazz) {
-		// TODO Auto-generated method stub
-		return null;
+    	Mapper<T> mapper = (Mapper<T>) this.classMapping.get(clazz);
+    	if (mapper == null) {
+            throw new RuntimeException("Target class is not a registered entity: " + clazz.getName());
+        }
+        return mapper;
 	}
 
 	private static List<Class<?>> scanEntities(String basePackage) {

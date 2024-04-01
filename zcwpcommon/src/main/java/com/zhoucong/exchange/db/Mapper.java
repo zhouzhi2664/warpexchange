@@ -2,6 +2,9 @@ package com.zhoucong.exchange.db;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -11,13 +14,15 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.ResultSetExtractor;
 
 public class Mapper<T> {
 	
 	final Logger logger = LoggerFactory.getLogger(getClass());
 	
 	final Class<T> entityClass;
-    //final Constructor<T> constructor;
+    final Constructor<T> constructor;
     final String tableName;
     
     // @Id property:
@@ -31,13 +36,18 @@ public class Mapper<T> {
     
     final List<AccessibleProperty> insertableProperties;
     final List<AccessibleProperty> updatableProperties;
+    
+    final ResultSetExtractor<List<T>> resultSetExtractor;
 	
 	final String selectSQL;
     final String insertSQL;
     final String insertIgnoreSQL;
     final String updateSQL;
     final String deleteSQL;
-
+    
+    public T newInstance() throws ReflectiveOperationException {
+        return this.constructor.newInstance();
+    }
 	
 	public Mapper(Class<T> clazz) throws Exception {		
 		List<AccessibleProperty> all = getProperties(clazz);
@@ -51,7 +61,7 @@ public class Mapper<T> {
 		this.insertableProperties = all.stream().filter(AccessibleProperty::isInsertable).collect(Collectors.toList());
 		this.updatableProperties = all.stream().filter(AccessibleProperty::isUpdatable).collect(Collectors.toList());
 		this.entityClass = clazz;
-		
+		this.constructor = clazz.getConstructor();
 		this.tableName = getTableName(clazz);
 		this.selectSQL = "SELECT * FROM " + this.tableName + " WHERE " + this.id.propertyName + " = ?";
 		this.updateSQL = "UPDATE" + this.tableName + "SET"
@@ -64,6 +74,34 @@ public class Mapper<T> {
 				+ ") VALUES (" + numOfQuestions(this.insertableProperties.size()) + ")";
 		this.insertIgnoreSQL = this.insertSQL.replace("INSERT INTO", "INSERT IGNORE INTO");		
 		this.deleteSQL = "DELETE FROM " + this.tableName + " WHERE " + this.id.propertyName + " = ?";
+		this.resultSetExtractor = new ResultSetExtractor<>() {
+			@Override
+            public List<T> extractData(ResultSet rs) throws SQLException, DataAccessException {
+				final List<T> results = new ArrayList<>();
+				final ResultSetMetaData m = rs.getMetaData();
+				final int cols = m.getColumnCount();
+				final String[] names = new String[cols];
+				for (int i = 0; i < cols; i++) {
+                    names[i] = m.getColumnLabel(i + 1);
+                }
+				try {
+					while (rs.next()) {
+						T bean = newInstance();
+						for (int i = 0; i < cols; i++) {
+							String name = names[i];
+							AccessibleProperty p = allPropertiesMap.get(name);
+							if (p != null) {
+                                p.set(bean, rs.getObject(i + 1));
+                            }
+						}
+						results.add(bean);
+					}
+				} catch(ReflectiveOperationException e){
+					throw new RuntimeException(e);
+				}
+				return results;
+			}		
+		};		
 	}
 
 

@@ -59,6 +59,8 @@ public class TradingEngineService extends LoggerSupport{
     @Autowired
     ClearingService clearingService;
     
+    private long lastSequenceId = 0;
+    
     private boolean orderBookChanged = false;
     
     private OrderBookBean latestOrderBook = null;
@@ -138,6 +140,18 @@ public class TradingEngineService extends LoggerSupport{
     }
 
 	private void processEvent(AbstractEvent event) {		
+		
+		if (event.sequenceId <= this.lastSequenceId) {
+            logger.warn("skip duplicate event: {}", event);
+            return;
+        }
+		// 判断是否丢失了消息:
+		if (event.previousId > this.lastSequenceId) {
+			logger.warn("event lost: expected previous id {} but actual {} for event {}", this.lastSequenceId,
+                    event.previousId, event);
+			
+		}
+		
 		try {
             if (event instanceof OrderRequestEvent) {
                 createOrder((OrderRequestEvent) event);
