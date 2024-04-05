@@ -3,6 +3,9 @@ package com.zhoucong.exchange.db;
 import java.util.ArrayList;
 import java.util.List;
 
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.NonUniqueResultException;
+
 /**
  * Hold criteria query information.
  * 
@@ -66,5 +69,31 @@ public class Criteria<T> {
 		Object[] selectParams = params();
 		return db.jdbcTemplate.query(selectSql, mapper.resultSetExtractor, selectParams);
 	}
-
+	
+	T first() {
+		this.offset = 0;
+        this.maxResults = 1;
+        String selectSql = sql();
+        Object[] selectParams = params();
+        List<T> list = db.jdbcTemplate.query(selectSql, mapper.resultSetExtractor, selectParams);
+        if (list.isEmpty()) {
+            return null;
+        }
+        return list.get(0);
+	}
+	
+	T unique() {
+		this.offset = 0;
+        this.maxResults = 2;
+        String selectSql = sql();
+        Object[] selectParams = params();
+        List<T> list = db.jdbcTemplate.query(selectSql, mapper.resultSetExtractor, selectParams);
+        if (list.isEmpty()) {
+            throw new NoResultException("Expected unique row but nothing found.");
+        }
+        if (list.size() > 1) {
+            throw new NonUniqueResultException("Expected unique row but more than 1 rows found.");
+        }
+        return list.get(0);
+	}
 }

@@ -1,13 +1,14 @@
 package com.zhoucong.exchange.db;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * select ... from ... ORDER BY ...
  * 
  * @param <T> Generic type.
  */
-public class OrderBy<T> extends CriteriaQuery {
+public class OrderBy<T> extends CriteriaQuery<T> {
 	
 	public OrderBy(Criteria<T> criteria, String orderBy) {
         super(criteria);
@@ -28,6 +29,8 @@ public class OrderBy<T> extends CriteriaQuery {
         return this;
 	}
 	
+	//TODO
+	
 	/**
      * Add limit clause.
      * 
@@ -38,7 +41,32 @@ public class OrderBy<T> extends CriteriaQuery {
 		return limit(0,maxResults);
 	}
 	
+	/**
+     * Add limit clause.
+     * 
+     * @param offset     Offset.
+     * @param maxResults The max results.
+     * @return Criteria query object.
+     */
 	public Limit<T> limit(int offset, int maxResults) {
         return new Limit<>(this.criteria, offset, maxResults);
+    }
+	
+	/**
+     * Get all results as list.
+     * 
+     * @return list.
+     */
+    public List<T> list() {
+        return criteria.list();
+    }
+
+    /**
+     * Get first row of the query, or null if no result found.
+     * 
+     * @return Object T or null.
+     */
+    public T first() {
+        return criteria.first();
     }
 }

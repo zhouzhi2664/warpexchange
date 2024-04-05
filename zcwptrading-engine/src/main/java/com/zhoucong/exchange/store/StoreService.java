@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.zhoucong.exchange.model.support.EntitySupport;
 import com.zhoucong.exchange.message.event.AbstractEvent;
@@ -12,6 +14,8 @@ import com.zhoucong.exchange.messaging.MessageTypes;
 import com.zhoucong.exchange.model.trade.EventEntity;
 import com.zhoucong.exchange.support.LoggerSupport;
 
+@Component
+@Transactional
 public class StoreService extends LoggerSupport {
 
 	@Autowired

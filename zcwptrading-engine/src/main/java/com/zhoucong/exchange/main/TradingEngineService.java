@@ -42,6 +42,9 @@ public class TradingEngineService extends LoggerSupport{
 	@Value("#{exchangeConfiguration.orderBookDepth}")
     int orderBookDepth = 100;
 	
+	@Value("#{exchangeConfiguration.debugMode}")
+    boolean debugMode = false;
+	
 	boolean fatalError = false;
 	
 	@Autowired
@@ -140,7 +143,9 @@ public class TradingEngineService extends LoggerSupport{
     }
 
 	private void processEvent(AbstractEvent event) {		
-		
+		if (this.fatalError) {
+            return;
+        }
 		if (event.sequenceId <= this.lastSequenceId) {
             logger.warn("skip duplicate event: {}", event);
             return;
@@ -149,9 +154,29 @@ public class TradingEngineService extends LoggerSupport{
 		if (event.previousId > this.lastSequenceId) {
 			logger.warn("event lost: expected previous id {} but actual {} for event {}", this.lastSequenceId,
                     event.previousId, event);
-			
+			// 从数据库读取丢失的消息:
+		    List<AbstractEvent> events = storeService.loadEventsFromDb(this.lastSequenceId);
+		    if (events.isEmpty()) {
+                logger.error("cannot load lost event from db.");
+                panic();
+                return;
+            }
+		    //处理丢失的消息
+		    for (AbstractEvent e : events) {
+                this.processEvent(e);
+            }
+            return;
 		}
-		
+		// 判断当前消息是否指向上一条消息:
+		if (event.previousId != lastSequenceId) {
+			logger.error("bad event: expected previous id {} but actual {} for event: {}", this.lastSequenceId,
+                    event.previousId, event);
+            panic();
+            return;
+		}
+		if (logger.isDebugEnabled()) {
+            logger.debug("process event {} -> {}: {}...", this.lastSequenceId, event.sequenceId, event);
+        }
 		try {
             if (event instanceof OrderRequestEvent) {
                 createOrder((OrderRequestEvent) event);
@@ -169,12 +194,25 @@ public class TradingEngineService extends LoggerSupport{
             panic();
             return;
         }
+		this.lastSequenceId = event.sequenceId;
+		if (logger.isDebugEnabled()) {
+            logger.debug("set last processed sequence id: {}...", this.lastSequenceId);
+        }
+		if (debugMode) {
+            this.validate();
+            this.debug();
+        }
 	}
 	
 	private void panic() {
 		logger.error("application panic. exit now...");
         this.fatalError = true;
         System.exit(1);		
+	}
+	
+	boolean transfer(TransferEvent event) {
+		//TODO
+		return true;
 	}
 
 	void createOrder(OrderRequestEvent event) {
@@ -263,9 +301,12 @@ public class TradingEngineService extends LoggerSupport{
 		//TODO
 	}
 	
-	boolean transfer(TransferEvent event) {
+	public void debug() {
 		//TODO
-		return true;
 	}
-    
+	
+	void validate() {
+		//TODO
+	}
+ 
 }

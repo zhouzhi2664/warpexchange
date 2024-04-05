@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +64,22 @@ public class DbTemplate {
         return this.jdbcTemplate;
     }
 	
-	public <T> void insert(List<T> beans) {
+	public String getTable(Class<?> clazz) {
+		Mapper<?> mapper = classMapping.get(clazz);
+        if (mapper == null) {
+            throw new RuntimeException("Entity not registered: " + clazz.getSimpleName());
+        }
+        return mapper.tableName;
+	}
+    
+    public <T> From<T> from(Class<T> entityClass) {
+    	Mapper<T> mapper = getMapper(entityClass);
+    	return new From<>(new Criteria<>(this), mapper);
+    }
+    
+    //TODO
+    
+    public <T> void insert(List<T> beans) {
         for (T bean : beans) {
             doInsert(bean, false);
         }
@@ -75,12 +91,25 @@ public class DbTemplate {
         }
     }
     
-    public <T> From<T> from(Class<T> entityClass) {
-    	Mapper<T> mapper = getMapper(entityClass);
-    	return new From<>(new Criteria<>(this), mapper);
+    public <T> void insert(Stream<T> beans) {
+        beans.forEach((bean) -> {
+            doInsert(bean, false);
+        });
     }
-    
-	//TODO
+
+    public <T> void insertIgnore(Stream<T> beans) {
+        beans.forEach((bean) -> {
+            doInsert(bean, true);
+        });
+    }
+
+    public <T> void insert(T bean) {
+        doInsert(bean, false);
+    }
+
+    public <T> void insertIgnore(T bean) {
+        doInsert(bean, true);
+    }
 	
 	<T> void doInsert(T bean, boolean isIgnore) {
 		try {

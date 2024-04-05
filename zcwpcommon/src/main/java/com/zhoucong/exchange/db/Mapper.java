@@ -132,7 +132,7 @@ public class Mapper<T> {
 			
 		}
 		// TODO Auto-generated method stub
-		return null;
+		return properties;
 	}
     
 }

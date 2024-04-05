@@ -1,5 +1,6 @@
 package com.zhoucong.exchange.util;
 
+import java.io.IOException;
 import java.io.UncheckedIOException;
 
 import org.slf4j.Logger;
@@ -40,4 +41,13 @@ public final class JsonUtil {
             throw new UncheckedIOException(e);
         }
     }
+	
+	public static <T> T readJson(String str, Class<T> clazz) {
+		try {
+            return OBJECT_MAPPER.readValue(str, clazz);
+        } catch (JsonProcessingException e) {
+            logger.warn("cannot read json: " + str, e);
+            throw new RuntimeException(e);
+        }
+	}
 }
