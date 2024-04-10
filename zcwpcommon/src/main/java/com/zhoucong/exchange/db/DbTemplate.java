@@ -25,6 +25,7 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Component;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.PersistenceException;
 
 /**
@@ -71,14 +72,105 @@ public class DbTemplate {
         }
         return mapper.tableName;
 	}
+	
+	/**
+     * Get a model instance by class type and id. EntityNotFoundException is thrown if not found.
+     * 
+     * @param <T>   Generic type.
+     * @param clazz Entity class.
+     * @param id    Id value.
+     * @return Entity bean found by id.
+     */
+    public <T> T get(Class<T> clazz, Object id) {
+        T t = fetch(clazz, id);
+        if (t == null) {
+            throw new EntityNotFoundException(clazz.getSimpleName());
+        }
+        return t;
+    }
+
+    /**
+     * Get a model instance by class type and id. Return null if not found.
+     * 
+     * @param <T>	Generic type.
+     * @param clazz Entity class.
+     * @param id    Id value.
+     * @return Entity bean found by id.
+     */
+    public <T> T fetch(Class<T> clazz, Object id) {
+    	Mapper<T> mapper = getMapper(clazz);
+    	if (logger.isDebugEnabled()) {
+            logger.debug("SQL: {}", mapper.selectSQL);
+        }
+    	List<T> list = jdbcTemplate.query(mapper.selectSQL, mapper.resultSetExtractor, id);
+    	if (list.isEmpty()) {
+            return null;
+        }
+        return list.get(0);
+    }
+    
+    /**
+     * Remove bean by id.
+     * 
+     * @param bean The entity.
+     */
+    public <T> void delete(T bean) {
+    	try {
+            Mapper<?> mapper = getMapper(bean.getClass());
+            delete(bean.getClass(), mapper.getIdValue(bean));
+        } catch (ReflectiveOperationException e) {
+            throw new PersistenceException(e);
+        }
+    }
+    
+    /**
+     * Remove bean by id.
+     * 
+     * @param bean The entity.
+     */
+    public <T> void delete(Class<T> clazz, Object id) {
+    	Mapper<?> mapper = getMapper(clazz);
+        if (logger.isDebugEnabled()) {
+            logger.debug("SQL: {}", mapper.deleteSQL);
+        }
+        jdbcTemplate.update(mapper.deleteSQL, id);
+    }
+    
+    @SuppressWarnings("rawtypes")
+    public Select select(String... selectFields) {
+        return new Select(new Criteria(this), selectFields);
+    }
     
     public <T> From<T> from(Class<T> entityClass) {
     	Mapper<T> mapper = getMapper(entityClass);
     	return new From<>(new Criteria<>(this), mapper);
     }
     
-    //TODO
-    
+    /**
+     * Update entity's updatable properties by id.
+     * 
+     * @param <T>  Generic type.
+     * @param bean Entity object.
+     */
+    public <T> void update(T bean) {
+    	try {
+    		Mapper<?> mapper = getMapper(bean.getClass());
+    		Object[] args = new Object[mapper.updatableProperties.size() + 1];
+    		int n = 0;
+    		for (AccessibleProperty prop : mapper.updatableProperties) {
+                args[n] = prop.get(bean);
+                n++;
+            }
+    		args[n] = mapper.id.get(bean);
+    		if (logger.isDebugEnabled()) {
+                logger.debug("SQL: {}", mapper.updateSQL);
+            }
+            jdbcTemplate.update(mapper.updateSQL, args);
+    	} catch (ReflectiveOperationException e) {
+    		throw new PersistenceException(e);
+    	}
+    }
+        
     public <T> void insert(List<T> beans) {
         for (T bean : beans) {
             doInsert(bean, false);
@@ -147,8 +239,7 @@ public class DbTemplate {
 			} else {
                 // id is specified:
                 rows = jdbcTemplate.update(isIgnore ? mapper.insertIgnoreSQL : mapper.insertSQL, args);
-            }
-			
+            }			
 		} catch (ReflectiveOperationException e) {
             throw new PersistenceException(e);
         }
@@ -178,4 +269,10 @@ public class DbTemplate {
 		}
 		return classes;
 	}
+	
+	public String exportDDL() {
+		return String.join("\n\n", this.classMapping.values().stream().map((mapper) -> {
+            return mapper.ddl();
+        }).sorted().toArray(String[]::new));
+    }
 }

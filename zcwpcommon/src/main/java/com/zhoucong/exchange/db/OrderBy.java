@@ -27,9 +27,22 @@ public class OrderBy<T> extends CriteriaQuery<T> {
         }
 		criteria.orderBy.add(orderBy);
         return this;
-	}
-	
-	//TODO
+	}	
+    
+    /**
+     * Make a desc order by.
+     * 
+     * @return Criteria query object.
+     */
+    public OrderBy<T> desc() {
+    	int last = this.criteria.orderBy.size() - 1;
+    	String s = criteria.orderBy.get(last);
+    	if (!s.toUpperCase().endsWith(" DESC")) {
+            s = s + " DESC";
+        }
+    	criteria.orderBy.set(last, s);
+    	return this;
+    }
 	
 	/**
      * Add limit clause.

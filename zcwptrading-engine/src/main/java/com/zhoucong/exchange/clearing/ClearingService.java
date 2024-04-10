@@ -12,9 +12,10 @@ import com.zhoucong.exchange.match.MatchDetailRecord;
 import com.zhoucong.exchange.match.MatchResult;
 import com.zhoucong.exchange.model.trade.OrderEntity;
 import com.zhoucong.exchange.order.OrderService;
+import com.zhoucong.exchange.support.LoggerSupport;
 
 @Component
-public class ClearingService {
+public class ClearingService extends LoggerSupport {
 
 	final AssetService assetService;
 
@@ -31,11 +32,18 @@ public class ClearingService {
         case BUY -> {
         	// 买入时，按Maker的价格成交：
             for (MatchDetailRecord detail : result.matchDetails) {
+            	if (logger.isDebugEnabled()) {
+            		logger.debug(
+                            "clear buy matched detail: price = {}, quantity = {}, takerOrderId = {}, makerOrderId = {}, takerUserId = {}, makerUserId = {}",
+                            detail.price(), detail.quantity(), detail.takerOrder().id, detail.makerOrder().id,
+                            detail.takerOrder().userId, detail.makerOrder().userId);
+            	}
                 OrderEntity maker = detail.makerOrder();
                 BigDecimal matched = detail.quantity();
                 if (taker.price.compareTo(maker.price) > 0) {
                     // 实际买入价比报价低，部分USD退回账户:
                     BigDecimal unfreezeQuote = taker.price.subtract(maker.price).multiply(matched);
+                    logger.debug("unfree extra unused quote {} back to taker user {}", unfreezeQuote, taker.userId);
                     assetService.unfreeze(taker.userId, AssetEnum.USD, unfreezeQuote);
                 }
                 // 买方USD转入卖方账户:
@@ -55,6 +63,12 @@ public class ClearingService {
         }
         case SELL -> {
         	for (MatchDetailRecord detail : result.matchDetails) {
+        		if (logger.isDebugEnabled()) {
+                    logger.debug(
+                            "clear sell matched detail: price = {}, quantity = {}, takerOrderId = {}, makerOrderId = {}, takerUserId = {}, makerUserId = {}",
+                            detail.price(), detail.quantity(), detail.takerOrder().id, detail.makerOrder().id,
+                            detail.takerOrder().userId, detail.makerOrder().userId);
+                }
         		OrderEntity maker = detail.makerOrder();
                 BigDecimal matched = detail.quantity();
                 // 卖方BTC转入买方账户:

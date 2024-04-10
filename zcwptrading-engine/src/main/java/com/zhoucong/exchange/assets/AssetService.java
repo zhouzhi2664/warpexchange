@@ -123,4 +123,10 @@ public class AssetService {
         return zeroAsset;
     }
     
+    public void debug() {
+    	System.out.println("---------- assets ----------");
+    	//TODO
+    	
+    	System.out.println("---------- // assets ----------");
+    }    
 }

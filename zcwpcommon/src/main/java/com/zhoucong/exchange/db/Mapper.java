@@ -17,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ResultSetExtractor;
 
+import jakarta.persistence.Table;
+
 public class Mapper<T> {
 	
 	final Logger logger = LoggerFactory.getLogger(getClass());
@@ -103,8 +105,11 @@ public class Mapper<T> {
 			}		
 		};		
 	}
-
-
+	
+	Object getIdValue(Object bean) throws ReflectiveOperationException {
+		return this.id.get(bean);
+	}
+	
 	private Map<String, AccessibleProperty> buildPropertiesMap(List<AccessibleProperty> props) {
 		Map<String, AccessibleProperty> map = new HashMap<>();
 		for (AccessibleProperty prop : props) {
@@ -128,11 +133,50 @@ public class Mapper<T> {
 	private List<AccessibleProperty> getProperties(Class<T> clazz) {
 		List<AccessibleProperty> properties = new ArrayList<>();
 		for (Field f : clazz.getFields()) {
-			
-			
+					
 		}
 		// TODO Auto-generated method stub
 		return properties;
 	}
     
+	public String ddl() {
+		StringBuilder sb = new StringBuilder(256);
+		sb.append("CREATE TABLE ").append(this.tableName).append(" (\n");		
+		sb.append(String.join(",\n", this.allProperties.stream().sorted((o1, o2) -> {
+            // sort by ID first:
+            if (o1.isId()) {
+                return -1;
+            }
+            if (o2.isId()) {
+                return 1;
+            }
+            // sort by columnName:
+            return o1.propertyName.compareTo(o2.propertyName);
+        }).map((p) -> {
+            return "  " + p.propertyName + " " + p.columnDefinition;
+        }).toArray(String[]::new)));
+		sb.append(",\n");
+        // add unique key:
+        sb.append(getUniqueKey());
+        // add index:
+        sb.append(getIndex());
+        // add primary key:
+        sb.append("  PRIMARY KEY(").append(this.id.propertyName).append(")\n");
+        sb.append(") CHARACTER SET utf8 COLLATE utf8_general_ci AUTO_INCREMENT = 1000;\n");
+        return sb.toString();
+	}
+
+	String getUniqueKey() {
+		Table table = this.entityClass.getAnnotation(Table.class);
+		
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	String getIndex() {
+		Table table = this.entityClass.getAnnotation(Table.class);
+		
+		// TODO Auto-generated method stub
+		return null;
+	}
 }

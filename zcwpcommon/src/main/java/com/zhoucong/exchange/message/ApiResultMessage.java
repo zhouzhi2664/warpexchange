@@ -35,4 +35,12 @@ public class ApiResultMessage extends AbstractMessage {
         msg.createdAt = ts;
 		return msg;
 	}
+    
+    public static ApiResultMessage cancelOrderFailed(String refId, long ts) {
+        ApiResultMessage msg = new ApiResultMessage();
+        msg.error = CANCEL_ORDER_FAILED;
+        msg.refId = refId;
+        msg.createdAt = ts;
+        return msg;
+    }
 }

@@ -115,6 +115,23 @@ public class OrderEntity implements EntitySupport, Comparable<OrderEntity>{
     	return entity;
     }
     
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o instanceof OrderEntity) {
+            OrderEntity e = (OrderEntity) o;
+            return this.id.longValue() == e.id.longValue();
+        }
+        return false;
+    }
+    
+    @Override
+    public int hashCode() {
+        return this.id.hashCode();
+    }
+    
     @Transient
     @JsonIgnore
     public int getVersion() {

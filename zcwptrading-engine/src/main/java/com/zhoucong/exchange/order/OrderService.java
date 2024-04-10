@@ -98,4 +98,10 @@ public class OrderService {
         }
     }
     
+    public void debug() {
+        System.out.println("---------- orders ----------");
+        //TODO
+        
+        System.out.println("---------- // orders ----------");
+    }
 }

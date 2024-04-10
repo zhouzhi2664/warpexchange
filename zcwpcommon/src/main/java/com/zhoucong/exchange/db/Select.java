@@ -1,18 +1,21 @@
 package com.zhoucong.exchange.db;
 
-import com.itranswarp.exchange.db.From;
+import java.util.Arrays;
 
 /**
  * SELECT ... from ...
  * 
  * Default to "*".
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings("rawtypes")
 public final class Select extends CriteriaQuery {
 	
+	@SuppressWarnings("unchecked")
 	Select(Criteria criteria, String... selectFields) {
 		super(criteria);
-		
+		if (selectFields.length > 0) {
+            this.criteria.select = Arrays.asList(selectFields);
+        }
 	}
 	
 	/**

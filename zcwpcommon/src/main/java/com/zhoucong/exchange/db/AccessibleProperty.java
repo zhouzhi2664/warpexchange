@@ -111,7 +111,7 @@ public class AccessibleProperty {
         } else {
         	colDef = col.columnDefinition().toUpperCase();
         }
-    	boolean nullable = col == null ? true : col.nullable();
+    	boolean nullable = col.nullable();
         colDef = colDef + " " + (nullable ? "NULL" : "NOT NULL");
         
         if (isIdentityId()) {
@@ -124,6 +124,7 @@ public class AccessibleProperty {
         
     	return colDef;
     }
+    
     private static String getDefaultColumnType(Class<?> type, Column col) {
     	String ddl = DEFAULT_COLUMN_TYPES.get(type);
     	if (ddl.equals("VARCHAR($1)")) {

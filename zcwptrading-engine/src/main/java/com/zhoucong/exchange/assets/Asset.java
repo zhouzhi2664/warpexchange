@@ -2,6 +2,8 @@ package com.zhoucong.exchange.assets;
 
 import java.math.BigDecimal;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class Asset {
 	    // 可用余额:
 	    BigDecimal available;
@@ -25,5 +27,13 @@ public class Asset {
 	        return frozen;
 	    }
 
-
+	    @JsonIgnore
+	    public BigDecimal getTotal() {
+	        return available.add(frozen);
+	    }
+	    
+	    @Override
+	    public String toString() {
+	        return String.format("[available=%04.2f, frozen=%02.2f]", available, frozen);
+	    }
 }

@@ -5,11 +5,14 @@ import com.zhoucong.exchange.enums.Direction;
 import com.zhoucong.exchange.model.trade.OrderEntity;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.Map.Entry;
 
 public class OrderBook {
+	
 	public final Direction direction; // 方向
     public final TreeMap<OrderKey, OrderEntity> book; // 排序树
 
@@ -30,7 +33,13 @@ public class OrderBook {
         return this.book.put(new OrderKey(order.sequenceId, order.price), order) == null;
     }
     
-    //...
+    public boolean exist(OrderEntity order) {
+        return this.book.containsKey(new OrderKey(order.sequenceId, order.price));
+    }
+
+    public int size() {
+        return this.book.size();
+    }
     
     public List<OrderBookItemBean> getOrderBook(int maxDepth) {
     	List<OrderBookItemBean> items = new ArrayList<>(maxDepth);
@@ -57,7 +66,18 @@ public class OrderBook {
     
     @Override
     public String toString() {
-    	return "OrderBook toString() does not work，Because there is no override";
+    	if (this.book.isEmpty()) {
+            return "(empty)";
+        }
+    	List<String> orders = new ArrayList<>(10);
+    	for (Entry<OrderKey, OrderEntity> entry : this.book.entrySet()) {
+    		OrderEntity order = entry.getValue();
+            orders.add("  " + order.price + " " + order.unfilledQuantity + " " + order.toString());
+    	}
+    	if (direction == Direction.SELL) {
+            Collections.reverse(orders);
+        }
+        return String.join("\n", orders);
     }
     
     private static final Comparator<OrderKey> SORT_SELL = new Comparator<>() {
