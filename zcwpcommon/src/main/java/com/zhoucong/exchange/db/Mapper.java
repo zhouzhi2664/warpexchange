@@ -2,6 +2,7 @@ package com.zhoucong.exchange.db;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -18,6 +19,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ResultSetExtractor;
 
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 public class Mapper<T> {
 	
@@ -38,6 +40,9 @@ public class Mapper<T> {
     
     final List<AccessibleProperty> insertableProperties;
     final List<AccessibleProperty> updatableProperties;
+    
+    // property name -> AccessibleProperty
+    final Map<String, AccessibleProperty> updatablePropertiesMap;
     
     final ResultSetExtractor<List<T>> resultSetExtractor;
 	
@@ -62,6 +67,7 @@ public class Mapper<T> {
 		this.allPropertiesMap = buildPropertiesMap(this.allProperties);
 		this.insertableProperties = all.stream().filter(AccessibleProperty::isInsertable).collect(Collectors.toList());
 		this.updatableProperties = all.stream().filter(AccessibleProperty::isUpdatable).collect(Collectors.toList());
+		this.updatablePropertiesMap = buildPropertiesMap(this.updatableProperties);
 		this.entityClass = clazz;
 		this.constructor = clazz.getConstructor();
 		this.tableName = getTableName(clazz);
@@ -126,16 +132,27 @@ public class Mapper<T> {
 	}
 
 	private String getTableName(Class<T> clazz) {
-		// TODO Auto-generated method stub
-		return null;
+		Table table = clazz.getAnnotation(Table.class);
+        if (table != null && !table.name().isEmpty()) {
+            return table.name();
+        }
+        String name = clazz.getSimpleName();
+		return Character.toLowerCase(name.charAt(0)) + name.substring(1);
 	}
 	
 	private List<AccessibleProperty> getProperties(Class<T> clazz) {
 		List<AccessibleProperty> properties = new ArrayList<>();
 		for (Field f : clazz.getFields()) {
-					
+			if (Modifier.isStatic(f.getModifiers())) {
+                continue;
+            }
+            if (f.isAnnotationPresent(Transient.class)) {
+                continue;
+            }
+            var p = new AccessibleProperty(f);
+            logger.debug("found accessible property: {}", p);
+            properties.add(p);	
 		}
-		// TODO Auto-generated method stub
 		return properties;
 	}
     
@@ -168,15 +185,47 @@ public class Mapper<T> {
 
 	String getUniqueKey() {
 		Table table = this.entityClass.getAnnotation(Table.class);
-		
-		// TODO Auto-generated method stub
-		return null;
+		if (table != null) {
+			return Arrays.stream(table.uniqueConstraints()).map((c) -> {
+				String name = c.name().isEmpty() ? "UNI_" +String.join("_", c.columnNames()) : c.name();
+				return " CONSTRAINT " + name + " UNIQUE (" + String.join(", ", c.columnNames()) + "),\n";
+			}).reduce("", (acc, s) -> {
+				return acc + s;
+			});
+		}
+		return "";
 	}
 
 	String getIndex() {
 		Table table = this.entityClass.getAnnotation(Table.class);
-		
-		// TODO Auto-generated method stub
-		return null;
+		if (table != null) {
+			return Arrays.stream(table.indexes()).map((c) -> {
+				if(c.unique()) {
+					String name = c.name().isEmpty() ? "UNI_" + c.columnList().replace(" ", "").replace(",", "_")
+                            : c.name();
+					return "  CONSTRAINT " + name + " UNIQUE (" + c.columnList() + "),\n";
+				} else {
+					String name = c.name().isEmpty() ? "IDX_" + c.columnList().replace(" ", "").replace(",", "_")
+                            : c.name();
+					return "  INDEX " + name + " (" + c.columnList() + "),\n";
+				}
+			}).reduce("", (acc, s) -> {
+                return acc + s;
+            });
+		}
+		return "";
+	}
+	
+	static List<String> columnDefinitionSortBy = Arrays.asList("BIT", "BOOL", "TINYINT", "SMALLINT", "MEDIUMINT", "INT",
+            "INTEGER", "BIGINT", "FLOAT", "REAL", "DOUBLE", "DECIMAL", "YEAR", "DATE", "TIME", "DATETIME", "TIMESTAMP",
+            "VARCHAR", "CHAR", "BLOB", "TEXT", "MEDIUMTEXT");
+	
+	static int columnDefinitionSortIndex(String definition) {
+		int pos = definition.indexOf("(");
+		if (pos > 0) {
+            definition = definition.substring(0, pos);
+        }
+		int index = columnDefinitionSortBy.indexOf(definition.toUpperCase());
+		return index == (-1) ? Integer.MAX_VALUE : index;
 	}
 }

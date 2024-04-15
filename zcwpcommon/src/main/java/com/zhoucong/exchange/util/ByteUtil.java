@@ -1,9 +1,26 @@
 package com.zhoucong.exchange.util;
 
+import java.util.HexFormat;
+
 public class ByteUtil {
 
+	/**
+     * Convert bytes to hex string (all lower-case).
+     *
+     * @param b Input bytes.
+     * @return Hex string.
+     */
 	public static String toHexString(byte[] b) {
-		//TODO
-		return null;
+		return HexFormat.of().formatHex(b);
+	}
+	
+	/**
+     * Convert byte to hex string (all lower-case).
+     *
+     * @param b Input byte.
+     * @return Hex string.
+     */
+	public static String toHex(byte b) {
+		return toHexString(new byte[] { b });
 	}
 }

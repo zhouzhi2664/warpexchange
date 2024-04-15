@@ -1,4 +1,4 @@
-package com.zhoucong.exchange.main;
+package com.zhoucong.exchange;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -17,31 +17,37 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.zhoucong.exchange.assets.Asset;
+import com.zhoucong.exchange.assets.AssetService;
+import com.zhoucong.exchange.assets.Transfer;
+import com.zhoucong.exchange.bean.OrderBookBean;
+import com.zhoucong.exchange.clearing.ClearingService;
+import com.zhoucong.exchange.enums.AssetEnum;
+import com.zhoucong.exchange.enums.Direction;
+import com.zhoucong.exchange.enums.MatchType;
+import com.zhoucong.exchange.enums.UserType;
+import com.zhoucong.exchange.match.MatchEngine;
+import com.zhoucong.exchange.match.MatchResult;
+import com.zhoucong.exchange.match.MatchDetailRecord;
 import com.zhoucong.exchange.message.ApiResultMessage;
+import com.zhoucong.exchange.message.NotificationMessage;
 import com.zhoucong.exchange.message.event.AbstractEvent;
 import com.zhoucong.exchange.message.event.OrderCancelEvent;
 import com.zhoucong.exchange.message.event.OrderRequestEvent;
 import com.zhoucong.exchange.message.event.TransferEvent;
-import com.zhoucong.exchange.model.trade.OrderEntity;
-import com.zhoucong.exchange.bean.OrderBookBean;
-import com.zhoucong.exchange.message.NotificationMessage;
-import com.zhoucong.exchange.model.trade.MatchDetailEntity;
 import com.zhoucong.exchange.model.quotation.TickEntity;
-import com.zhoucong.exchange.match.MatchDetailRecord;
-import com.zhoucong.exchange.enums.MatchType;
-import com.zhoucong.exchange.store.StoreService;
-import com.zhoucong.exchange.enums.UserType;
-import com.zhoucong.exchange.assets.Transfer;
-import com.zhoucong.exchange.message.TickMessage;
-import com.zhoucong.exchange.enums.Direction;
-import com.zhoucong.exchange.assets.Asset;
-import com.zhoucong.exchange.enums.AssetEnum;
-import com.zhoucong.exchange.assets.AssetService;
-import com.zhoucong.exchange.clearing.ClearingService;
-import com.zhoucong.exchange.match.MatchEngine;
-import com.zhoucong.exchange.match.MatchResult;
+import com.zhoucong.exchange.model.trade.MatchDetailEntity;
+import com.zhoucong.exchange.model.trade.OrderEntity;
 import com.zhoucong.exchange.order.OrderService;
+import com.zhoucong.exchange.redis.RedisCache;
+import com.zhoucong.exchange.redis.RedisService;
+import com.zhoucong.exchange.store.StoreService;
+import com.zhoucong.exchange.message.TickMessage;
 import com.zhoucong.exchange.support.LoggerSupport;
+import com.zhoucong.exchange.util.JsonUtil;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 
 @Component
@@ -73,9 +79,20 @@ public class TradingEngineService extends LoggerSupport{
     @Autowired
     ClearingService clearingService;
     
+    @Autowired
+    RedisService redisService;
+    
     private long lastSequenceId = 0;
     
     private boolean orderBookChanged = false;
+    
+    private String shaUpdateOrderBookLua;
+    
+    private Thread tickThread;
+    private Thread notifyThread;
+    private Thread apiResultThread;
+    private Thread orderBookThread;
+    private Thread dbThread;
     
     private OrderBookBean latestOrderBook = null;
     private Queue<List<OrderEntity>> orderQueue = new ConcurrentLinkedQueue<>();
@@ -84,7 +101,114 @@ public class TradingEngineService extends LoggerSupport{
     private Queue<ApiResultMessage> apiResultQueue = new ConcurrentLinkedQueue<>();
     private Queue<NotificationMessage> notificationQueue = new ConcurrentLinkedQueue<>();
     
+    @PostConstruct
+    public void init() {
+    	
+    }
     
+    @PreDestroy
+    public void destroy() {
+    	//TODO
+    	this.orderBookThread.interrupt();
+    	this.dbThread.interrupt();
+    }
+    
+    private void runTickThread() {
+    	logger.info("start tick thread...");
+    	for (;;) {
+    		List<TickMessage> msgs = new ArrayList<>();
+    		for (;;) {
+    			TickMessage msg = tickQueue.poll();
+    			if (msg != null) {
+                    msgs.add(msg);
+                    if (msgs.size() >= 1000) {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+    		}
+    		if (!msgs.isEmpty()) {
+    			if (logger.isDebugEnabled()) {
+                    logger.debug("send {} tick messages...", msgs.size());
+                }
+    			//TODO
+    		} else {
+                // 无TickMessage时，暂停1ms:
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    logger.warn("{} was interrupted.", Thread.currentThread().getName());
+                    break;
+                }
+            }
+    	}
+    }
+    
+    private void runNotifyThread() {
+    	logger.info("start publish notify to redis...");
+    	for (;;) {
+    		NotificationMessage msg = this.notificationQueue.poll();
+    		if (msg != null) {
+    			redisService.publish(RedisCache.Topic.NOTIFICATION, JsonUtil.writeJson(msg));
+    		} else {
+    			// 无更新时，暂停1ms:
+            	try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    logger.warn("{} was interrupted.", Thread.currentThread().getName());
+                    break;
+                }
+    		}
+    	}
+    }
+    
+    private void runApiResultThread() {
+    	logger.info("start publish api result to redis...");
+    	for (;;) {
+    		ApiResultMessage result = this.apiResultQueue.poll();
+    		if (result != null) {
+                redisService.publish(RedisCache.Topic.TRADING_API_RESULT, JsonUtil.writeJson(result));
+            }else {
+                // 无推送时，暂停1ms:
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    logger.warn("{} was interrupted.", Thread.currentThread().getName());
+                    break;
+                }
+            }
+    	}
+    }
+    
+    private void runOrderBookThread() {
+    	logger.info("start update orderbook snapshot to redis...");
+    	long lastSequenceId = 0;
+    	for (;;) {
+    		// 获取OrderBookBean的引用，确保后续操作针对局部变量而非成员变量:
+            final OrderBookBean orderBook = this.latestOrderBook;
+            // 仅在OrderBookBean更新后刷新Redis:
+            if (orderBook != null && orderBook.sequenceId > lastSequenceId) {
+            	if (logger.isDebugEnabled()) {
+                    logger.debug("update orderbook snapshot at sequence id {}...", orderBook.sequenceId);
+                }
+            	redisService.executeScriptReturnBoolean(this.shaUpdateOrderBookLua, 
+            			// keys: [cache-key]
+            			new String[] { RedisCache.Key.ORDER_BOOK }, 
+            			// args: [sequenceId, json-data]
+            			new String[] { String.valueOf(orderBook.sequenceId), JsonUtil.writeJson(orderBook) });
+            	lastSequenceId = orderBook.sequenceId;
+            } else {
+            	// 无更新时，暂停1ms:
+            	try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    logger.warn("{} was interrupted.", Thread.currentThread().getName());
+                    break;
+                }
+            }
+    	}
+    }
     
     private void runDbThread() {
     	logger.info("start batch insert to db...");
@@ -154,7 +278,7 @@ public class TradingEngineService extends LoggerSupport{
         }
     }
 
-	private void processEvent(AbstractEvent event) {		
+	public void processEvent(AbstractEvent event) {		
 		if (this.fatalError) {
             return;
         }
