@@ -103,7 +103,18 @@ public class TradingEngineService extends LoggerSupport{
     
     @PostConstruct
     public void init() {
-    	
+    	this.shaUpdateOrderBookLua = this.redisService.loadScriptFromClassPath("/redis/update-orderbook.lua");
+    	//TODO
+    	this.tickThread = new Thread(this::runTickThread, "async-tick");
+    	this.tickThread.start();
+    	this.notifyThread = new Thread(this::runNotifyThread, "async-notify");
+        this.notifyThread.start();
+        this.orderBookThread = new Thread(this::runOrderBookThread, "async-orderbook");
+        this.orderBookThread.start();
+        this.apiResultThread = new Thread(this::runApiResultThread, "async-api-result");
+        this.apiResultThread.start();
+        this.dbThread = new Thread(this::runDbThread, "async-db");
+        this.dbThread.start();
     }
     
     @PreDestroy

@@ -20,6 +20,7 @@ import io.lettuce.core.RedisURI;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.pubsub.RedisPubSubAdapter;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.lettuce.core.support.ConnectionPoolSupport;
 
@@ -46,7 +47,6 @@ public class RedisService {
         poolConfig.setTestWhileIdle(true);;
         this.redisConnectionPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(),
         		poolConfig);
-		
 	}
 	
 	@PreDestroy
@@ -86,11 +86,19 @@ public class RedisService {
             return commands.scriptLoad(scriptContent);
         });
     }
-    
+
+    /**
+     * Consumer<String> listener表示一个接受字符串参数但不返回值的函数，具体实现在调用subscribe方法处实现，通常是lambda表达式或方法引用
+     */    
     public void subscribe(String channel, Consumer<String> listener) {    	
     	StatefulRedisPubSubConnection<String, String> conn = this.redisClient.connectPubSub();
-    	
-    	//TODO
+    	conn.addListener(new RedisPubSubAdapter<String, String>() {
+    		@Override
+    		public void message(String channel, String message) {
+    			listener.accept(message);
+    		}
+    	});
+    	conn.sync().subscribe(channel);
     }
 	
 	public Boolean executeScriptReturnBoolean(String sha, String[] keys, String[] values) {
@@ -138,6 +146,5 @@ public class RedisService {
 	        logger.warn("executeSync redis failed.", e);
 	        throw new RuntimeException(e);
 	    }
-	}
-	
+	}	
 }
