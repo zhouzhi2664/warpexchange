@@ -35,6 +35,10 @@ import com.zhoucong.exchange.message.event.AbstractEvent;
 import com.zhoucong.exchange.message.event.OrderCancelEvent;
 import com.zhoucong.exchange.message.event.OrderRequestEvent;
 import com.zhoucong.exchange.message.event.TransferEvent;
+import com.zhoucong.exchange.messaging.MessageConsumer;
+import com.zhoucong.exchange.messaging.MessageProducer;
+import com.zhoucong.exchange.messaging.Messaging.Topic;
+import com.zhoucong.exchange.messaging.MessagingFactory;
 import com.zhoucong.exchange.model.quotation.TickEntity;
 import com.zhoucong.exchange.model.trade.MatchDetailEntity;
 import com.zhoucong.exchange.model.trade.OrderEntity;
@@ -48,7 +52,6 @@ import com.zhoucong.exchange.util.JsonUtil;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-
 
 @Component
 public class TradingEngineService extends LoggerSupport{
@@ -80,7 +83,14 @@ public class TradingEngineService extends LoggerSupport{
     ClearingService clearingService;
     
     @Autowired
+    MessagingFactory messagingFactory;
+    
+    @Autowired
     RedisService redisService;
+    
+    private MessageConsumer consumer;
+    
+    private MessageProducer<TickMessage> producer;
     
     private long lastSequenceId = 0;
     
@@ -105,6 +115,7 @@ public class TradingEngineService extends LoggerSupport{
     public void init() {
     	this.shaUpdateOrderBookLua = this.redisService.loadScriptFromClassPath("/redis/update-orderbook.lua");
     	//TODO
+    	this.producer = this.messagingFactory.createMessageProducer(Topic.TICK, TickMessage.class);
     	this.tickThread = new Thread(this::runTickThread, "async-tick");
     	this.tickThread.start();
     	this.notifyThread = new Thread(this::runNotifyThread, "async-notify");
