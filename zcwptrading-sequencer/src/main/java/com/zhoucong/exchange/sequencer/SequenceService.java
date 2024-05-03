@@ -83,6 +83,7 @@ public class SequenceService extends LoggerSupport {
             panic();
 			throw new Error(e);
 		}
+		
 		if (logger.isDebugEnabled()) {
 			long end = System.currentTimeMillis();
 			logger.info("sequenced {} messages in {} ms. current sequence id: {}", messages.size(), (end - start),

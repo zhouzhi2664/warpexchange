@@ -37,6 +37,7 @@ import com.zhoucong.exchange.message.event.OrderRequestEvent;
 import com.zhoucong.exchange.message.event.TransferEvent;
 import com.zhoucong.exchange.messaging.MessageConsumer;
 import com.zhoucong.exchange.messaging.MessageProducer;
+import com.zhoucong.exchange.messaging.Messaging;
 import com.zhoucong.exchange.messaging.Messaging.Topic;
 import com.zhoucong.exchange.messaging.MessagingFactory;
 import com.zhoucong.exchange.model.quotation.TickEntity;
@@ -48,6 +49,7 @@ import com.zhoucong.exchange.redis.RedisService;
 import com.zhoucong.exchange.store.StoreService;
 import com.zhoucong.exchange.message.TickMessage;
 import com.zhoucong.exchange.support.LoggerSupport;
+import com.zhoucong.exchange.util.IpUtil;
 import com.zhoucong.exchange.util.JsonUtil;
 
 import jakarta.annotation.PostConstruct;
@@ -114,7 +116,8 @@ public class TradingEngineService extends LoggerSupport{
     @PostConstruct
     public void init() {
     	this.shaUpdateOrderBookLua = this.redisService.loadScriptFromClassPath("/redis/update-orderbook.lua");
-    	//TODO
+    	this.consumer = this.messagingFactory.createBatchMessageListener(Messaging.Topic.TRADE, IpUtil.getHostId(),
+    			this::processMessages);
     	this.producer = this.messagingFactory.createMessageProducer(Topic.TICK, TickMessage.class);
     	this.tickThread = new Thread(this::runTickThread, "async-tick");
     	this.tickThread.start();
@@ -130,7 +133,7 @@ public class TradingEngineService extends LoggerSupport{
     
     @PreDestroy
     public void destroy() {
-    	//TODO
+    	this.consumer.stop();
     	this.orderBookThread.interrupt();
     	this.dbThread.interrupt();
     }
@@ -154,7 +157,7 @@ public class TradingEngineService extends LoggerSupport{
     			if (logger.isDebugEnabled()) {
                     logger.debug("send {} tick messages...", msgs.size());
                 }
-    			//TODO
+    			this.producer.sendMessages(msgs);
     		} else {
                 // 无TickMessage时，暂停1ms:
                 try {
