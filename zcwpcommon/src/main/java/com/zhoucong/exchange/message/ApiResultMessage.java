@@ -2,8 +2,8 @@ package com.zhoucong.exchange.message;
 
 
 import com.zhoucong.exchange.model.trade.OrderEntity;
-import com.zhoucong.exchange.error.ApiError;
-import com.zhoucong.exchange.error.ApiErrorResponse;
+import com.zhoucong.exchange.ApiError;
+import com.zhoucong.exchange.ApiErrorResponse;
 
 /**
  * API result message.

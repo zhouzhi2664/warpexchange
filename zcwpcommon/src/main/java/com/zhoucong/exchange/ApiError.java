@@ -1,4 +1,4 @@
-package com.zhoucong.exchange.error;
+package com.zhoucong.exchange;
 
 /**
  * ApiError constants.

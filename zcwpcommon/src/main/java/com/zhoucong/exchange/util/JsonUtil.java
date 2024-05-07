@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,11 +13,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.SerializerProvider;
 
 /**
  * Customize JSON serialization using Jackson.
@@ -153,7 +157,46 @@ public final class JsonUtil {
         }
     }
     
+    /**
+     * A special map to JSON that using string builder.
+     *
+     * @param map
+     * @return
+     */
+    public static String buildJsonFromJsonMap(Map<String, String> stringJsonMap) {
+    	if (stringJsonMap.isEmpty()) {
+            return "{}";
+        }
+    	StringBuilder sb = new StringBuilder(1024);
+    	sb.append("{");
+    	for (String key : stringJsonMap.keySet()) {
+    		String jsonString = stringJsonMap.get(key);
+    		if (jsonString != null) {
+                // "key": jsonString
+                sb.append('\"').append(key).append("\":").append(jsonString).append(',');
+    		}
+    	}
+    	// set last ',' to '}'
+        sb.setCharAt(sb.length() - 1, '}');
+    	return sb.toString();
+    }
     
-    //TODO	Exception异常处理 TypeReference
+    public static final TypeReference<Map<String, Object>> TYPE_MAP_STRING_OBJECT = new TypeReference<>() {
+    };
+
+    public static final TypeReference<Map<String, String>> TYPE_MAP_STRING_STRING = new TypeReference<>() {
+    };
+
+    public static final TypeReference<Map<String, Integer>> TYPE_MAP_STRING_INTEGER = new TypeReference<>() {
+    };
+
+    public static final TypeReference<Map<String, Boolean>> TYPE_MAP_STRING_BOOLEAN = new TypeReference<>() {
+    };
     
+    public static class BigDecimalStringSerializer extends JsonSerializer<BigDecimal> {
+    	@Override
+    	public void serialize(BigDecimal value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+    		gen.writeString("\"" + value.toPlainString() + "\"");
+    	}
+    }
 }
