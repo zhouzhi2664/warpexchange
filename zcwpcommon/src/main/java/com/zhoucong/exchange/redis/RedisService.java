@@ -107,7 +107,7 @@ public class RedisService {
 			});
 	}
 	
-	public Boolean executeScriptReturnString(String sha, String[] keys, String[] values) {
+	public String executeScriptReturnString(String sha, String[] keys, String[] values) {
 		return executeSync(commands -> {
 			return commands.evalsha(sha, ScriptOutputType.VALUE, keys, values);
 			});

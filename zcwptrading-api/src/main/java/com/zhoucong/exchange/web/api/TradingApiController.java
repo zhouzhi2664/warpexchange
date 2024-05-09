@@ -1,7 +1,9 @@
 package com.zhoucong.exchange.web.api;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
@@ -22,12 +25,15 @@ import com.zhoucong.exchange.ApiErrorResponse;
 import com.zhoucong.exchange.ApiException;
 import com.zhoucong.exchange.bean.OrderBookBean;
 import com.zhoucong.exchange.bean.OrderRequestBean;
+import com.zhoucong.exchange.bean.SimpleMatchDetailRecord;
 import com.zhoucong.exchange.ctx.UserContext;
 import com.zhoucong.exchange.message.ApiResultMessage;
 import com.zhoucong.exchange.message.event.OrderCancelEvent;
 import com.zhoucong.exchange.message.event.OrderRequestEvent;
+import com.zhoucong.exchange.model.trade.OrderEntity;
 import com.zhoucong.exchange.redis.RedisCache;
 import com.zhoucong.exchange.redis.RedisService;
+import com.zhoucong.exchange.service.HistoryService;
 import com.zhoucong.exchange.service.SendEventService;
 import com.zhoucong.exchange.service.TradingEngineApiProxyService;
 import com.zhoucong.exchange.support.AbstractApiController;
@@ -40,6 +46,9 @@ import jakarta.annotation.PostConstruct;
 @RequestMapping("/api")
 public class TradingApiController extends AbstractApiController{
 
+	@Autowired
+    private HistoryService historyService;
+	
 	@Autowired
     private SendEventService sendEventService;
 	
@@ -58,6 +67,11 @@ public class TradingApiController extends AbstractApiController{
 	
 	Map<String, DeferredResult<ResponseEntity<String>>> deferredResultMap = new ConcurrentHashMap<>();
 	
+	@PostConstruct
+    public void init() {
+        this.redisService.subscribe(RedisCache.Topic.TRADING_API_RESULT, this::onApiResultMessage);
+    }
+	
 	private String getTimeoutJson() throws IOException {
         if (timeoutJson == null) {
             timeoutJson = this.objectMapper
@@ -66,9 +80,9 @@ public class TradingApiController extends AbstractApiController{
         return timeoutJson;
     }
 	
-	@PostConstruct
-    public void init() {
-        this.redisService.subscribe(RedisCache.Topic.TRADING_API_RESULT, this::onApiResultMessage);
+	@GetMapping("/timestamp")
+    public Map<String, Long> timestamp() {
+        return Map.of("timestamp", Long.valueOf(System.currentTimeMillis()));
     }
 	
 	@ResponseBody
@@ -78,10 +92,106 @@ public class TradingApiController extends AbstractApiController{
     }
 	
 	@ResponseBody
+    @GetMapping(value = "/orders", produces = "application/json")
+    public String getOpenOrders() throws IOException {
+        return tradingEngineApiProxyService.get("/internal/" + UserContext.getRequiredUserId() + "/orders");
+    }
+	
+	@ResponseBody
+    @GetMapping(value = "/orders/{orderId}", produces = "application/json")
+    public String getOpenOrder(@PathVariable("orderId") Long orderId) throws IOException {
+        final Long userId = UserContext.getRequiredUserId();
+        return tradingEngineApiProxyService.get("/internal/" + userId + "/orders/" + orderId);
+    }	
+	
+	@ResponseBody
     @GetMapping(value = "/orderBook", produces = "application/json")
     public String getOrderBook() {
         String data = redisService.get(RedisCache.Key.ORDER_BOOK);
         return data == null ? OrderBookBean.EMPTY : data;
+    }
+	
+	@ResponseBody
+    @GetMapping(value = "/ticks", produces = "application/json")
+    public String getRecentTicks() {
+        List<String> data = redisService.lrange(RedisCache.Key.RECENT_TICKS, 0, -1);
+        if (data == null || data.isEmpty()) {
+            return "[]";
+        }
+        StringJoiner sj = new StringJoiner(",", "[", "]");
+        for (String t : data) {
+            sj.add(t);
+        }
+        return sj.toString();
+    }
+	
+	@ResponseBody
+    @GetMapping(value = "/bars/day", produces = "application/json")
+    public String getDayBars() {
+        long end = System.currentTimeMillis();
+        long start = end - 366 * 86400_000;
+        return getBars(RedisCache.Key.DAY_BARS, start, end);
+    }
+
+    @ResponseBody
+    @GetMapping(value = "/bars/hour", produces = "application/json")
+    public String getHourBars() {
+        long end = System.currentTimeMillis();
+        long start = end - 720 * 3600_000;
+        return getBars(RedisCache.Key.HOUR_BARS, start, end);
+    }
+
+    @ResponseBody
+    @GetMapping(value = "/bars/min", produces = "application/json")
+    public String getMinBars() {
+        long end = System.currentTimeMillis();
+        long start = end - 1440 * 60_000;
+        return getBars(RedisCache.Key.MIN_BARS, start, end);
+    }
+
+    @ResponseBody
+    @GetMapping(value = "/bars/sec", produces = "application/json")
+    public String getSecBars() {
+        long end = System.currentTimeMillis();
+        long start = end - 3600 * 1_000;
+        return getBars(RedisCache.Key.SEC_BARS, start, end);
+    }
+	
+	private String getBars(String key, long start, long end) {
+        List<String> data = redisService.zrangebyscore(key, start, end);
+        if (data == null || data.isEmpty()) {
+            return "[]";
+        }
+        StringJoiner sj = new StringJoiner(",", "[", "]");
+        for (String t : data) {
+            sj.add(t);
+        }
+        return sj.toString();
+    }
+	
+	@GetMapping("/history/orders")
+    public List<OrderEntity> getHistoryOrders(
+            @RequestParam(value = "maxResults", defaultValue = "100") int maxResults) {
+        if (maxResults < 1 || maxResults > 1000) {
+            throw new ApiException(ApiError.PARAMETER_INVALID, "maxResults", "Invalid parameter.");
+        }
+        return historyService.getHistoryOrders(UserContext.getRequiredUserId(), maxResults);
+    }
+	
+	@GetMapping("/history/orders/{orderId}/matches")
+    public List<SimpleMatchDetailRecord> getOrderMatchDetails(@PathVariable("orderId") Long orderId) throws Exception {
+        final Long userId = UserContext.getRequiredUserId();
+        // 查找活动Order:
+        String strOpenOrder = tradingEngineApiProxyService.get("/internal/" + userId + "/orders/" + orderId);
+        if (strOpenOrder.equals("null")) {
+            // 查找历史Order:
+            OrderEntity orderEntity = this.historyService.getHistoryOrder(userId, orderId);
+            if (orderEntity == null) {
+                // Order未找到:
+                throw new ApiException(ApiError.ORDER_NOT_FOUND, orderId.toString(), "Order not found.");
+            }
+        }
+        return this.historyService.getHistoryMatchDetails(orderId);
     }
 	
 	/**
