@@ -21,8 +21,8 @@
 		</dependency>
 
 		<dependency>
-			<groupId>com.itranswarp.exchange</groupId>
-			<artifactId>common</artifactId>
+			<groupId>com.zhoucong.exchange</groupId>
+			<artifactId>zcwpcommon</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 
